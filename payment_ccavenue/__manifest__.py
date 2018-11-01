@@ -1,0 +1,15 @@
+# -*- coding: utf-8 -*-
+
+{
+    'name': 'CCAvenue Payment Acquirer',
+    'category': 'Accounting',
+    'summary': 'Payment Acquirer: CCAvenue Implementation',
+    'description': """CCAvenue Payment Acquirer""",
+    'depends': ['payment'],
+    'data': [
+        'views/payment_acquirer.xml',
+        'views/payment_ccavenue_templates.xml',
+        'data/payment_ccavenue_data.xml',
+    ],
+    'installable': True,
+}
