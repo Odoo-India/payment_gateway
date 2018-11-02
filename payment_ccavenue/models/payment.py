@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
 import base64
@@ -53,7 +54,7 @@ class PaymentAcquirer(models.Model):
         keys = 'merchant_id+order_id+currency+amount+redirect_url+cancel_url+language'.split('+')
         sign = ''.join('%s=%s&' % (k, values.get(k)) for k in keys)
         plainText = self.ccavenue_pad(sign)
-        enc_cipher = AES.new(md5(self.ccavenue_working_key.encode()).hexdigest(), AES.MODE_CBC, iv)
+        enc_cipher = AES.new(md5(self.ccavenue_working_key.encode()).digest(), AES.MODE_CBC, iv)
         encryptedText = base64.b64encode(enc_cipher.encrypt(plainText))
         return encryptedText
 
