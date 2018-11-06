@@ -78,7 +78,7 @@ class PaymentAcquirer(models.Model):
                                access_code=self.ccavenue_access_code,
                                merchant_id=self.ccavenue_merchant_id,
                                order_id=values.get('reference'),
-                               currency=values.get('currency'),
+                               currency=values.get('currency').name,
                                amount=values.get('amount'),
                                redirect_url='%s' % urls.url_join(base_url, '/payment/ccavenue/return') + "?return_url=" + str(values.get('return_url')),
                                cancel_url='%s' % urls.url_join(base_url, '/payment/ccavenue/cancel'),
