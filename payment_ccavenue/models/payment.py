@@ -2,14 +2,13 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
-import base64
 
-from Crypto.Cipher import AES
-from hashlib import md5
 from werkzeug import urls
 
 from odoo import api, fields, models, _
 from odoo.addons.payment.models.payment_acquirer import ValidationError
+from odoo.addons.payment_ccavenue.models.ccavutil import encrypt, decrypt
+from odoo.addons.payment_ccavenue.controllers.main import CCAvenueController
 from odoo.tools.float_utils import float_compare
 
 _logger = logging.getLogger(__name__)
@@ -49,26 +48,26 @@ class PaymentAcquirer(models.Model):
         data += chr(length)*length
         return data
 
-    def _ccavenue_encrypted_request(self, values):
-        iv = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f'
+    def _ccavenue_request_parameters(self, values):
         keys = 'merchant_id+order_id+currency+amount+redirect_url+cancel_url+language'.split('+')
-        sign = ''.join('%s=%s&' % (k, values.get(k)) for k in keys)
-        plainText = self.ccavenue_pad(sign)
-        enc_cipher = AES.new(md5(self.ccavenue_working_key.encode()).digest(), AES.MODE_CBC, iv)
-        encryptedText = base64.b64encode(enc_cipher.encrypt(plainText))
-        return encryptedText
+        param = ''.join('%s=%s&' % (k, values.get(k)) for k in keys)
+        return param
+        # plainText = self.ccavenue_pad(sign)
+        # enc_cipher = AES.new(md5(self.ccavenue_working_key.encode()).digest(), AES.MODE_CBC, iv)
+        # encryptedText = base64.b64encode(enc_cipher.encrypt(plainText))
+        # return encryptedText
 
-    def _ccavenue_encrypted_response(self, values, key):
-        dncryptedText = {}
-        iv = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f'
-        encryptedText = values.get('encResp').decode('hex')
-        dec_cipher = AES.new(md5(key).hexdigest(), AES.MODE_CBC, iv)
-        result = base64.b64encode(dec_cipher.decrypt(encryptedText))
-        vals = result.split('&')
-        for data in vals:
-            temp = data.split('=')
-            dncryptedText[temp[0]] = temp[1]
-        return dncryptedText
+    # def _ccavenue_encrypted_response(self, values, key):
+    #     dncryptedText = {}
+    #     iv = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f'
+    #     encryptedText = values.get('encResp').decode('hex')
+    #     dec_cipher = AES.new(md5(key).hexdigest(), AES.MODE_CBC, iv)
+    #     result = base64.b64encode(dec_cipher.decrypt(encryptedText))
+    #     vals = result.split('&')
+    #     for data in vals:
+    #         temp = data.split('=')
+    #         dncryptedText[temp[0]] = temp[1]
+    #     return dncryptedText
 
     @api.multi
     def ccavenue_form_generate_values(self, values):
@@ -80,12 +79,12 @@ class PaymentAcquirer(models.Model):
                                order_id=values.get('reference'),
                                currency=values.get('currency').name,
                                amount=values.get('amount'),
-                               redirect_url='%s' % urls.url_join(base_url, '/payment/ccavenue/return') + "?return_url=" + str(values.get('return_url')),
+                               redirect_url='%s' % urls.url_join(base_url, CCAvenueController._return_url),
                                cancel_url='%s' % urls.url_join(base_url, '/payment/ccavenue/cancel'),
                                language='EN',
                                )
-
-        ccavenue_values['encRequest'] = self._ccavenue_encrypted_request(ccavenue_values)
+        ccavenue_request_param = self._ccavenue_request_parameters(ccavenue_values)
+        ccavenue_values['encRequest'] = encrypt(ccavenue_request_param, self.ccavenue_working_key)
         return ccavenue_values
 
     @api.multi
