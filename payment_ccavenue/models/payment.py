@@ -7,7 +7,7 @@ from werkzeug import urls
 
 from odoo import api, fields, models, _
 from odoo.addons.payment.models.payment_acquirer import ValidationError
-from odoo.addons.payment_ccavenue.models.ccavutil import encrypt, decrypt
+from odoo.addons.payment_ccavenue.models.ccavutil import encrypt
 from odoo.addons.payment_ccavenue.controllers.main import CCAvenueController
 from odoo.tools.float_utils import float_compare
 
@@ -52,22 +52,6 @@ class PaymentAcquirer(models.Model):
         keys = 'merchant_id+order_id+currency+amount+redirect_url+cancel_url+language'.split('+')
         param = ''.join('%s=%s&' % (k, values.get(k)) for k in keys)
         return param
-        # plainText = self.ccavenue_pad(sign)
-        # enc_cipher = AES.new(md5(self.ccavenue_working_key.encode()).digest(), AES.MODE_CBC, iv)
-        # encryptedText = base64.b64encode(enc_cipher.encrypt(plainText))
-        # return encryptedText
-
-    # def _ccavenue_encrypted_response(self, values, key):
-    #     dncryptedText = {}
-    #     iv = '\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f'
-    #     encryptedText = values.get('encResp').decode('hex')
-    #     dec_cipher = AES.new(md5(key).hexdigest(), AES.MODE_CBC, iv)
-    #     result = base64.b64encode(dec_cipher.decrypt(encryptedText))
-    #     vals = result.split('&')
-    #     for data in vals:
-    #         temp = data.split('=')
-    #         dncryptedText[temp[0]] = temp[1]
-    #     return dncryptedText
 
     @api.multi
     def ccavenue_form_generate_values(self, values):
@@ -80,7 +64,7 @@ class PaymentAcquirer(models.Model):
                                currency=values.get('currency').name,
                                amount=values.get('amount'),
                                redirect_url='%s' % urls.url_join(base_url, CCAvenueController._return_url),
-                               cancel_url='%s' % urls.url_join(base_url, '/payment/ccavenue/cancel'),
+                               cancel_url='%s' % urls.url_join(base_url, CCAvenueController._cancel_url),
                                language='EN',
                                )
         ccavenue_request_param = self._ccavenue_request_parameters(ccavenue_values)
@@ -124,7 +108,6 @@ class PaymentTransaction(models.Model):
         # check what is buyed
         if float_compare(float(data.get('amount', '0.0')), self.amount, 2) != 0:
             invalid_parameters.append(('Amount', data.get('amount'), '%.2f' % self.amount))
-
         return invalid_parameters
 
     @api.model
@@ -135,25 +118,16 @@ class PaymentTransaction(models.Model):
         status_code = data.get('order_status')
         if status_code == "Success":
             _logger.info('Validated CCAvenue payment for tx %s: set as done' % (self.reference))
-            self.write({
-                'state': 'done',
-                'acquirer_reference': data.get('tracking_id'),
-                'date_validate': fields.Datetime.now(),
-            })
+            self.write({'acquirer_reference': data.get('tracking_id')})
+            self._set_transaction_done()
             return True
         elif status_code == "Aborted":
             _logger.info('Aborted CCAvenue payment for tx %s: set as cancel' % (self.reference))
-            self.write({
-                'state': 'cancel',
-                'acquirer_reference': data.get('tracking_id'),
-                'date_validate': fields.Datetime.now(),
-            })
-            return True
+            self.write({'acquirer_reference': data.get('tracking_id'), 'state_message': data.get('status_message')})
+            self._set_transaction_cancel()
+            return False
         else:
-            error = data.get('failure_message')
+            error = data.get('failure_message') or data.get('status_message')
             _logger.info(error)
-            self.write({
-                'state': 'error',
-                'state_message': error,
-            })
+            self._set_transaction_error(error)
             return False
