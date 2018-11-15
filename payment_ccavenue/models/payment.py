@@ -108,7 +108,6 @@ class PaymentTransaction(models.Model):
         # check what is buyed
         if float_compare(float(data.get('amount', '0.0')), self.amount, 2) != 0:
             invalid_parameters.append(('Amount', data.get('amount'), '%.2f' % self.amount))
-
         return invalid_parameters
 
     @api.model
